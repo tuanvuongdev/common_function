@@ -9,60 +9,88 @@ const ShipMap = ({
   onSelectSeat,
   selectedSeats,
 }) => {
+  const [currentAreaIndex, setCurrentAreaIndex] = useState(0); // State để theo dõi vùng ghế hiện tại
+  const [currentDeckIndex, setCurrentDeckIndex] = useState(0); // State để theo dõi desk hiện tại
+
   // Hàm kiểm tra xem ghế có bị chặn hoặc đã được đặt trước không
   const isSeatUnavailable = (deckId, seatIndex) => {
     const seatId = `${deckId}-${seatIndex}`;
     return bookedSeats.includes(seatId) || blockedSeats.includes(seatId);
   };
 
-  // Hàm render sơ đồ ghế của từng tầng
-  const renderDeckSeats = (deck) => {
+  // Hàm render sơ đồ ghế của từng khu vực
+  const renderAreaSeats = (deck, area) => {
     const seatTypeInfoArr = JSON.parse(deck.seatTypeInfo);
-    return seatTypeInfoArr.map((seatTypeId, index) => {
-      // Tìm thông tin giá và loại ghế tương ứng
-      const seatPriceInfo = tripPrices.find(
-        (price) =>
-          price.seatTypeId === Number(seatTypeId) &&
-          price.deckId === deck.deckId
-      );
-
-      const isSelected = selectedSeats.some(
-        (seat) => seat.seatIndex === index && seat.deckId === deck.deckId
-      );
-      const isUnavailable = isSeatUnavailable(deck.deckId, index); // Kiểm tra ghế có bị chặn hay không
-
-      let backgroundColor;
-      if (isSelected) {
-        backgroundColor = "red"; // Màu đỏ cho ghế đã chọn
-      } else if (isUnavailable) {
-        backgroundColor = bookedSeats.includes(`${deck.deckId}-${index}`)
-          ? "gray" // Màu xám cho ghế đã đặt
-          : "black"; // Màu đen cho ghế bị chặn
-      } else {
-        backgroundColor = seatPriceInfo?.color; // Màu ghế theo loại ghế
-      }
-
-      return (
+    return area.positionArea.map((row, rowIndex) => (
+      <div key={rowIndex}>
         <div
-          key={index}
-          onClick={() =>
-            !isUnavailable &&
-            handleSelectSeat(deck.deckId, index, seatPriceInfo)
-          }
           style={{
-            border: "1px solid black",
-            padding: "10px",
-            margin: "5px",
-            backgroundColor,
-            height: "100px",
-            cursor: seatTypeId && !isUnavailable ? "pointer" : "not-allowed",
-            opacity: isSelected ? 0.5 : 1,
+            display: "grid",
+            gridTemplateColumns: `repeat(${row.length}, 1fr)`,
           }}
         >
-          {seatTypeId ? seatPriceInfo.seatTypeName : ""}
+          {row.map((seatIndex) => {
+            const seatTypeId = seatTypeInfoArr[seatIndex];
+            const seatPriceInfo = tripPrices.find(
+              (price) =>
+                price.seatTypeId === Number(seatTypeId) &&
+                price.deckId === deck.deckId
+            );
+
+            const isSelected = selectedSeats.some(
+              (seat) =>
+                seat.seatIndex === seatIndex && seat.deckId === deck.deckId
+            );
+            const isUnavailable = isSeatUnavailable(deck.deckId, seatIndex); // Kiểm tra ghế có bị chặn hay không
+
+            let backgroundColor;
+            if (isSelected) {
+              backgroundColor = "red"; // Màu đỏ cho ghế đã chọn
+            } else if (isUnavailable) {
+              backgroundColor = bookedSeats.includes(
+                `${deck.deckId}-${seatIndex}`
+              )
+                ? "gray" // Màu xám cho ghế đã đặt
+                : "black"; // Màu đen cho ghế bị chặn
+            } else {
+              backgroundColor = seatPriceInfo?.color; // Màu ghế theo loại ghế
+            }
+
+            return (
+              <div
+                key={seatIndex}
+                onClick={() =>
+                  !isUnavailable &&
+                  handleSelectSeat(deck.deckId, seatIndex, seatPriceInfo)
+                }
+                style={{
+                  border: "1px solid black",
+                  padding: "10px",
+                  margin: "5px",
+                  backgroundColor,
+                  cursor:
+                    seatTypeId && !isUnavailable ? "pointer" : "not-allowed",
+                  opacity: isSelected ? 0.5 : 1,
+                }}
+              >
+                {seatTypeId ? seatPriceInfo.seatTypeName : ""}
+              </div>
+            );
+          })}
         </div>
-      );
-    });
+      </div>
+    ));
+  };
+
+  // Hàm render sơ đồ ghế của từng tầng
+  const renderDeckSeats = (deck) => {
+    const area = deck.areaAxis[currentAreaIndex]; // Lấy vùng ghế hiện tại
+    return (
+      <div key={currentAreaIndex}>
+        <h5>{area.name}</h5> {/* Hiển thị tên vùng một lần */}
+        {renderAreaSeats(deck, area)}
+      </div>
+    );
   };
 
   // Hàm xử lý khi người dùng chọn ghế
@@ -86,24 +114,97 @@ const ShipMap = ({
     }
   };
 
+  // Hàm xử lý chuyển vùng
+  const handlePrevArea = () => {
+    setCurrentAreaIndex((prevIndex) => (prevIndex > 0 ? prevIndex - 1 : 0));
+  };
+
+  const handleNextArea = () => {
+    setCurrentAreaIndex((prevIndex) => {
+      const maxIndex = busTypeDecks[currentDeckIndex].areaAxis.length - 1; // Lấy chỉ số tối đa của vùng
+      return prevIndex < maxIndex ? prevIndex + 1 : maxIndex;
+    });
+  };
+
+  // Hàm xử lý chuyển desk
+  const handlePrevDeck = () => {
+    setCurrentDeckIndex((prevIndex) => (prevIndex > 0 ? prevIndex - 1 : 0));
+    setCurrentAreaIndex(0); // Reset area khi chuyển desk
+  };
+
+  const handleNextDeck = () => {
+    setCurrentDeckIndex((prevIndex) => {
+      const maxIndex = busTypeDecks.length - 1; // Lấy chỉ số tối đa của desk
+      return prevIndex < maxIndex ? prevIndex + 1 : maxIndex;
+    });
+    setCurrentAreaIndex(0); // Reset area khi chuyển desk
+  };
+
   return (
     <div>
       <h3>Seat Map</h3>
-      {busTypeDecks.map((deck) => (
-        <div key={deck.deckId}>
-          <h4>{deck.name}</h4>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${deck.noOfColumns}, 110px)`,
-            }}
-          >
-            {renderDeckSeats(deck)}
+      <div>
+        <button
+          onClick={handlePrevDeck}
+          disabled={currentDeckIndex === 0}
+          style={buttonStyle}
+        >
+          Prev Desk
+        </button>
+        <button
+          onClick={handleNextDeck}
+          disabled={currentDeckIndex === busTypeDecks.length - 1}
+          style={buttonStyle}
+        >
+          Next Desk
+        </button>
+      </div>
+      {busTypeDecks.map((deck, deckIndex) => {
+        if (deckIndex !== currentDeckIndex) return null; // Chỉ hiển thị desk hiện tại
+        return (
+          <div key={deck.deckId}>
+            <h4>{deck.name}</h4>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: `repeat(${deck.noOfColumns}, 1fr)`,
+              }}
+            >
+              {renderDeckSeats(deck)}
+            </div>
+            <div>
+              <button
+                onClick={handlePrevArea}
+                disabled={currentAreaIndex === 0}
+                style={buttonStyle}
+              >
+                Prev Area
+              </button>
+              <button
+                onClick={handleNextArea}
+                disabled={currentAreaIndex === deck.areaAxis.length - 1}
+                style={buttonStyle}
+              >
+                Next Area
+              </button>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
+};
+
+// Cài đặt kiểu dáng cho các nút
+const buttonStyle = {
+  padding: "10px 20px",
+  margin: "10px",
+  border: "none",
+  borderRadius: "5px",
+  backgroundColor: "#4CAF50", // Màu xanh
+  color: "white",
+  cursor: "pointer",
+  transition: "background-color 0.3s",
 };
 
 // Component hiển thị danh sách ghế đã chọn
@@ -186,9 +287,49 @@ const App = () => {
       seatTypeInfo:
         '["","","2","2","","","2","2","2","","2","2","2","","2","2","2","","2","2","2","","2","2","2","","2","2","2","","2","2","2","","2","2","2","","2","2","2","","2","2","2","2","2","2"]',
       deckId: 55,
+      areaAxis: [
+        {
+          name: "Area 1",
+          color: "#C23C65",
+          noOfSeats: 0,
+          positionArea: [
+            [0, 1, 2, 3],
+            [4, 5, 6, 7],
+            [8, 9, 10, 11],
+            [12, 13, 14, 15],
+            [16, 17, 18, 19],
+            [20, 21, 22, 23],
+            [24, 25, 26, 27],
+            [28, 29, 30, 31],
+            [32, 33, 34, 35],
+            [36, 37, 38, 39],
+            [40, 41, 42, 43],
+            [44, 45, 46, 47],
+          ],
+        },
+        {
+          name: "Area 2",
+          color: "#C23C65",
+          noOfSeats: 0,
+          positionArea: [
+            [0, 1, 2, 3],
+            [4, 5, 6, 7],
+            [8, 9, 10, 11],
+            [12, 13, 14, 15],
+            [16, 17, 18, 19],
+            [20, 21, 22, 23],
+            [24, 25, 26, 27],
+            [28, 29, 30, 31],
+            [32, 33, 34, 35],
+            [36, 37, 38, 39],
+            [40, 41, 42, 43],
+            [44, 45, 46, 47],
+          ],
+        },
+      ],
     },
     {
-      name: "Upper Deck",
+      name: "Upper Deck01",
       deckOrder: 2,
       noOfRows: 12,
       noOfColumns: 4,
@@ -196,6 +337,34 @@ const App = () => {
       seatTypeInfo:
         '["","","2","2","","","2","2","2","","2","2","2","","2","2","2","","2","2","2","","2","2","2","","2","2","2","","2","2","2","","2","2","2","","2","2","2","","2","2","2","2","2","2"]',
       deckId: 56,
+      areaAxis: [
+        {
+          name: "Area 1",
+          color: "#C23C65",
+          noOfSeats: 0,
+          positionArea: [
+            [24, 25, 26, 27],
+            [28, 29, 30, 31],
+            [32, 33, 34, 35],
+            [36, 37, 38, 39],
+            [40, 41, 42, 43],
+            [44, 45, 46, 47],
+          ],
+        },
+        {
+          name: "Area 2",
+          color: "#C23C65",
+          noOfSeats: 0,
+          positionArea: [
+            [0, 1, 2, 3],
+            [4, 5, 6, 7],
+            [8, 9, 10, 11],
+            [12, 13, 14, 15],
+            [16, 17, 18, 19],
+            [20, 21, 22, 23],
+          ],
+        },
+      ],
     },
   ];
 
